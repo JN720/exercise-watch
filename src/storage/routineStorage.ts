@@ -1,9 +1,15 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { Routine, SoundConfig } from '../types/routine';
+import { Routine, SoundConfig, AudioSettings } from '../types/routine';
 import { PRESET_SOUNDS } from '../audio/presets';
 
 const ROUTINES_STORAGE_KEY = '@exercise_watch_routines_v1';
 const SOUND_CONFIGS_STORAGE_KEY = '@exercise_watch_sound_configs_v1';
+const AUDIO_SETTINGS_STORAGE_KEY = '@exercise_watch_audio_settings_v1';
+
+export const DEFAULT_AUDIO_SETTINGS: AudioSettings = {
+  masterVolume: 1.0,
+  duckMusic: true,
+};
 
 export const INITIAL_PRESET_ROUTINES: Routine[] = [
   {
@@ -122,7 +128,6 @@ export async function loadRoutines(): Promise<Routine[]> {
   try {
     const raw = await AsyncStorage.getItem(ROUTINES_STORAGE_KEY);
     if (!raw) {
-      // Save presets as initial data
       await saveRoutines(INITIAL_PRESET_ROUTINES);
       return INITIAL_PRESET_ROUTINES;
     }
@@ -136,9 +141,7 @@ export async function loadRoutines(): Promise<Routine[]> {
 export async function saveRoutines(routines: Routine[]): Promise<void> {
   try {
     await AsyncStorage.setItem(ROUTINES_STORAGE_KEY, JSON.stringify(routines));
-  } catch (err) {
-    // Fail safe
-  }
+  } catch (err) {}
 }
 
 export async function saveRoutine(routine: Routine): Promise<Routine[]> {
@@ -184,4 +187,22 @@ export async function saveSoundConfig(config: SoundConfig): Promise<Record<strin
     await AsyncStorage.setItem(SOUND_CONFIGS_STORAGE_KEY, JSON.stringify(updated));
   } catch (err) {}
   return updated;
+}
+
+export async function loadAudioSettings(): Promise<AudioSettings> {
+  try {
+    const raw = await AsyncStorage.getItem(AUDIO_SETTINGS_STORAGE_KEY);
+    if (!raw) return DEFAULT_AUDIO_SETTINGS;
+    const parsed = JSON.parse(raw);
+    return { ...DEFAULT_AUDIO_SETTINGS, ...parsed };
+  } catch (err) {
+    return DEFAULT_AUDIO_SETTINGS;
+  }
+}
+
+export async function saveAudioSettings(settings: AudioSettings): Promise<AudioSettings> {
+  try {
+    await AsyncStorage.setItem(AUDIO_SETTINGS_STORAGE_KEY, JSON.stringify(settings));
+  } catch (err) {}
+  return settings;
 }

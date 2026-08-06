@@ -3,14 +3,18 @@ import { View, Text, StyleSheet, TouchableOpacity, StatusBar } from 'react-nativ
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { Timer, ListMusic, Sliders } from 'lucide-react-native';
 import { COLORS } from './src/constants/theme';
-import { Routine, SoundConfig } from './src/types/routine';
+import { Routine, SoundConfig, AudioSettings } from './src/types/routine';
 import {
   loadRoutines,
   saveRoutine,
   deleteRoutine,
   loadSoundConfigs,
   saveSoundConfig,
+  loadAudioSettings,
+  saveAudioSettings,
+  DEFAULT_AUDIO_SETTINGS,
 } from './src/storage/routineStorage';
+import { configureAudioSession, setMasterVolume } from './src/audio/soundEngine';
 import { StopwatchScreen } from './src/screens/StopwatchScreen';
 import { RoutineListScreen } from './src/screens/RoutineListScreen';
 import { RoutineEditScreen } from './src/screens/RoutineEditScreen';
@@ -23,6 +27,7 @@ export default function App() {
   const [routines, setRoutines] = useState<Routine[]>([]);
   const [activeRoutine, setActiveRoutine] = useState<Routine | null>(null);
   const [soundConfigs, setSoundConfigs] = useState<Record<string, SoundConfig>>({});
+  const [audioSettings, setAudioSettings] = useState<AudioSettings>(DEFAULT_AUDIO_SETTINGS);
   const [editingRoutine, setEditingRoutine] = useState<Routine | null>(null);
 
   // Load initial data from persistent storage
@@ -35,9 +40,21 @@ export default function App() {
       }
       const loadedConfigs = await loadSoundConfigs();
       setSoundConfigs(loadedConfigs);
+
+      const loadedAudioSettings = await loadAudioSettings();
+      setAudioSettings(loadedAudioSettings);
+      setMasterVolume(loadedAudioSettings.masterVolume);
+      configureAudioSession(loadedAudioSettings.duckMusic);
     }
     init();
   }, []);
+
+  const handleUpdateAudioSettings = async (newSettings: AudioSettings) => {
+    setAudioSettings(newSettings);
+    setMasterVolume(newSettings.masterVolume);
+    await configureAudioSession(newSettings.duckMusic);
+    await saveAudioSettings(newSettings);
+  };
 
   const handleSelectRoutine = (routine: Routine) => {
     setActiveRoutine(routine);
@@ -122,6 +139,8 @@ export default function App() {
             <StopwatchScreen
               activeRoutine={activeRoutine}
               soundConfigs={soundConfigs}
+              audioSettings={audioSettings}
+              onUpdateAudioSettings={handleUpdateAudioSettings}
               onNavigateToRoutines={() => setCurrentTab('routines')}
             />
           )}
@@ -153,7 +172,9 @@ export default function App() {
           {currentTab === 'sound_lab' && (
             <SoundConfigScreen
               soundConfigs={soundConfigs}
+              audioSettings={audioSettings}
               onSaveSoundConfig={handleSaveSoundConfig}
+              onUpdateAudioSettings={handleUpdateAudioSettings}
             />
           )}
         </View>

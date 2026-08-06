@@ -50,6 +50,11 @@ export interface Routine {
   updatedAt: number;
 }
 
+export interface AudioSettings {
+  masterVolume: number; // 0.0 to 1.0
+  duckMusic: boolean; // true = drown out playing music when sound plays
+}
+
 export interface Lap {
   lapNumber: number;
   lapTimeMs: number;

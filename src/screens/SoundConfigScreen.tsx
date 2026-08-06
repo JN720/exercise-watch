@@ -1,20 +1,25 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput, Switch } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Volume2, Sliders, Play, RotateCcw } from 'lucide-react-native';
+import Slider from '@react-native-community/slider';
+import { Volume2, Sliders, Play, RotateCcw, Disc, Sparkles } from 'lucide-react-native';
 import { COLORS } from '../constants/theme';
-import { SoundConfig, SoundType } from '../types/routine';
+import { SoundConfig, SoundType, AudioSettings } from '../types/routine';
 import { PRESET_SOUNDS } from '../audio/presets';
 import { playSound } from '../audio/soundEngine';
 
 interface SoundConfigScreenProps {
   soundConfigs: Record<string, SoundConfig>;
+  audioSettings: AudioSettings;
   onSaveSoundConfig: (config: SoundConfig) => void;
+  onUpdateAudioSettings: (settings: AudioSettings) => void;
 }
 
 export const SoundConfigScreen: React.FC<SoundConfigScreenProps> = ({
   soundConfigs,
+  audioSettings,
   onSaveSoundConfig,
+  onUpdateAudioSettings,
 }) => {
   const [selectedKey, setSelectedKey] = useState<string>('beep_high');
 
@@ -42,7 +47,7 @@ export const SoundConfigScreen: React.FC<SoundConfigScreenProps> = ({
       type: waveType,
       volume: parseFloat(volume) || 0.8,
     };
-    playSound(customConfig);
+    playSound(customConfig, undefined, undefined, audioSettings.masterVolume);
   };
 
   const handleSaveConfig = () => {
@@ -67,18 +72,87 @@ export const SoundConfigScreen: React.FC<SoundConfigScreenProps> = ({
     }
   };
 
+  const handleMasterVolumeChange = (val: number) => {
+    onUpdateAudioSettings({
+      ...audioSettings,
+      masterVolume: val,
+    });
+  };
+
+  const handleToggleDuckMusic = (val: boolean) => {
+    onUpdateAudioSettings({
+      ...audioSettings,
+      duckMusic: val,
+    });
+  };
+
+  const masterVolPercent = Math.round(audioSettings.masterVolume * 100);
+
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <View style={styles.header}>
         <Text style={styles.headerTitle}>Sound Synthesizer Studio</Text>
         <Text style={styles.headerSubtitle}>
-          Configure custom frequencies, pitch, waveforms, and volume
+          Configure master volume, music ducking, and tone parameters
         </Text>
       </View>
 
       <ScrollView contentContainerStyle={styles.scrollContent}>
+        {/* Global Audio Settings Section */}
+        <View style={styles.globalCard}>
+          <View style={styles.globalCardHeader}>
+            <View style={styles.titleGroup}>
+              <Sparkles size={18} color={COLORS.primary} />
+              <Text style={styles.cardTitle}>Global Audio & Music Settings</Text>
+            </View>
+          </View>
+
+          {/* Master Volume Slider */}
+          <View style={styles.fieldBlock}>
+            <View style={styles.fieldRowHeader}>
+              <View style={styles.fieldTitleGroup}>
+                <Volume2 size={18} color={COLORS.primary} />
+                <Text style={styles.fieldTitleBold}>Master Volume</Text>
+              </View>
+              <Text style={styles.percentBadge}>{masterVolPercent}%</Text>
+            </View>
+
+            <Slider
+              style={styles.slider}
+              minimumValue={0}
+              maximumValue={1}
+              step={0.01}
+              value={audioSettings.masterVolume}
+              onValueChange={handleMasterVolumeChange}
+              minimumTrackTintColor={COLORS.primary}
+              maximumTrackTintColor={COLORS.bgInput}
+              thumbTintColor={COLORS.primary}
+            />
+          </View>
+
+          {/* Music Ducking Switch */}
+          <View style={[styles.fieldRowHeader, { marginTop: 12 }]}>
+            <View style={styles.fieldTitleGroup}>
+              <Disc size={18} color={COLORS.secondary} />
+              <View style={styles.duckTextGroup}>
+                <Text style={styles.fieldTitleBold}>Drown Out Playing Music</Text>
+                <Text style={styles.fieldSubtext}>
+                  Lowers background music (Spotify/Apple Music) when workout cues play.
+                </Text>
+              </View>
+            </View>
+
+            <Switch
+              value={audioSettings.duckMusic}
+              onValueChange={handleToggleDuckMusic}
+              trackColor={{ false: COLORS.bgInput, true: 'rgba(255, 179, 0, 0.4)' }}
+              thumbColor={audioSettings.duckMusic ? COLORS.secondary : COLORS.textDim}
+            />
+          </View>
+        </View>
+
         {/* Sound Selection Chips */}
-        <Text style={styles.sectionLabel}>SELECT SOUND PRESET TO CONFIGURE</Text>
+        <Text style={styles.sectionLabel}>SELECT SOUND PRESET TO CUSTOMIZE</Text>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.chipScroll}>
           {Object.keys(soundConfigs).map((key) => {
             const isSelected = key === selectedKey;
@@ -162,9 +236,9 @@ export const SoundConfigScreen: React.FC<SoundConfigScreenProps> = ({
             </View>
           </View>
 
-          {/* Volume */}
+          {/* Preset Tone Base Volume */}
           <View style={styles.fieldRow}>
-            <Text style={styles.fieldTitle}>Volume (0.0 - 1.0)</Text>
+            <Text style={styles.fieldTitle}>Base Preset Volume (0.0 - 1.0)</Text>
             <View style={styles.inputBox}>
               <TextInput
                 style={styles.textInput}
@@ -224,12 +298,61 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingBottom: 40,
   },
+  globalCard: {
+    backgroundColor: COLORS.bgCard,
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+  },
+  globalCardHeader: {
+    marginBottom: 14,
+  },
+  fieldBlock: {
+    marginBottom: 12,
+  },
+  fieldRowHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  fieldTitleGroup: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    flex: 1,
+    paddingRight: 8,
+  },
+  fieldTitleBold: {
+    color: COLORS.textMain,
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  percentBadge: {
+    color: COLORS.primary,
+    fontSize: 15,
+    fontWeight: '800',
+  },
+  duckTextGroup: {
+    flex: 1,
+  },
+  fieldSubtext: {
+    color: COLORS.textDim,
+    fontSize: 11,
+    marginTop: 2,
+  },
+  slider: {
+    width: '100%',
+    height: 36,
+    marginTop: 6,
+  },
   sectionLabel: {
     color: COLORS.primary,
     fontSize: 11,
     fontWeight: '800',
     letterSpacing: 1,
-    marginTop: 12,
+    marginTop: 4,
     marginBottom: 8,
   },
   chipScroll: {

@@ -1,14 +1,15 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
-import { StopwatchStatus, Lap, Routine, SingleHitSound, RepeatingSound, SoundConfig } from '../types/routine';
+import { StopwatchStatus, Lap, Routine, SingleHitSound, RepeatingSound, SoundConfig, AudioSettings } from '../types/routine';
 import { playSound } from '../audio/soundEngine';
 
 interface UseStopwatchOptions {
   activeRoutine?: Routine | null;
   soundConfigs?: Record<string, SoundConfig>;
+  audioSettings?: AudioSettings;
   onSoundTrigger?: (soundId: string, label: string) => void;
 }
 
-export function useStopwatch({ activeRoutine, soundConfigs, onSoundTrigger }: UseStopwatchOptions = {}) {
+export function useStopwatch({ activeRoutine, soundConfigs, audioSettings, onSoundTrigger }: UseStopwatchOptions = {}) {
   const [elapsedMs, setElapsedMs] = useState<number>(0);
   const [status, setStatus] = useState<StopwatchStatus>('idle');
   const [laps, setLaps] = useState<Lap[]>([]);
@@ -33,6 +34,8 @@ export function useStopwatch({ activeRoutine, soundConfigs, onSoundTrigger }: Us
   const evaluateRoutineSounds = useCallback((elapsedSeconds: number) => {
     if (!activeRoutine) return;
 
+    const masterVol = audioSettings?.masterVolume !== undefined ? audioSettings.masterVolume : 1.0;
+
     // 1. Evaluate Single-Hit Sounds
     if (activeRoutine.singleHits && activeRoutine.singleHits.length > 0) {
       activeRoutine.singleHits.forEach((sh: SingleHitSound) => {
@@ -40,7 +43,7 @@ export function useStopwatch({ activeRoutine, soundConfigs, onSoundTrigger }: Us
           if (elapsedSeconds >= sh.timeSeconds) {
             triggeredSingleHitsRef.current.add(sh.id);
             if (!isMuted) {
-              playSound(sh.soundId, soundConfigs, sh.volume);
+              playSound(sh.soundId, soundConfigs, sh.volume, masterVol);
             }
             if (onSoundTrigger) {
               onSoundTrigger(sh.soundId, sh.label || `Single hit at ${sh.timeSeconds}s`);
@@ -72,7 +75,7 @@ export function useStopwatch({ activeRoutine, soundConfigs, onSoundTrigger }: Us
             if (isWithinLimit) {
               executedSet.add(intervalIndex);
               if (!isMuted) {
-                playSound(rep.soundId, soundConfigs, rep.volume);
+                playSound(rep.soundId, soundConfigs, rep.volume, masterVol);
               }
               if (onSoundTrigger) {
                 onSoundTrigger(
@@ -85,7 +88,7 @@ export function useStopwatch({ activeRoutine, soundConfigs, onSoundTrigger }: Us
         }
       });
     }
-  }, [activeRoutine, soundConfigs, isMuted, onSoundTrigger]);
+  }, [activeRoutine, soundConfigs, isMuted, audioSettings, onSoundTrigger]);
 
   // Main animation / timer frame loop
   const tick = useCallback(() => {

@@ -1,22 +1,51 @@
-import { Audio } from 'expo-av';
+import { Audio, InterruptionModeIOS, InterruptionModeAndroid } from 'expo-av';
 import { Platform } from 'react-native';
-import { SoundConfig, SoundType } from '../types/routine';
+import { SoundConfig, SoundType, AudioSettings } from '../types/routine';
 import { PRESET_SOUNDS } from './presets';
 
-// Configure iOS audio session so sounds play even when physical silent switch is ON
-if (Platform.OS !== 'web') {
-  Audio.setAudioModeAsync({
-    playsInSilentModeIOS: true,
-    staysActiveInBackground: true,
-    shouldDuckAndroid: true,
-  }).catch(() => {});
+let currentAudioSettings: AudioSettings = {
+  masterVolume: 1.0,
+  duckMusic: true,
+};
+
+// Configure iOS and Android audio session for silent mode override and background music ducking
+export async function configureAudioSession(duckMusic: boolean = true): Promise<void> {
+  currentAudioSettings.duckMusic = duckMusic;
+  if (Platform.OS !== 'web') {
+    try {
+      await Audio.setAudioModeAsync({
+        playsInSilentModeIOS: true,
+        staysActiveInBackground: true,
+        interruptionModeIOS: duckMusic
+          ? InterruptionModeIOS.DuckOthers
+          : InterruptionModeIOS.MixWithOthers,
+        shouldDuckAndroid: duckMusic,
+        interruptionModeAndroid: duckMusic
+          ? InterruptionModeAndroid.DuckOthers
+          : InterruptionModeAndroid.DoNotMix,
+      });
+    } catch (err) {
+      // Fail-safe gracefully
+    }
+  }
 }
+
+export function setMasterVolume(volume: number): void {
+  currentAudioSettings.masterVolume = Math.max(0, Math.min(1, volume));
+}
+
+export function getAudioSettings(): AudioSettings {
+  return { ...currentAudioSettings };
+}
+
+// Initial audio mode setup
+configureAudioSession(true);
 
 // Cache generated expo-av sound instances for rapid playback
 const nativeSoundCache: Record<string, string> = {};
 
 function getWavDataUri(frequency: number, duration: number, waveType: string, volume: number): string {
-  const cacheKey = `${frequency}_${duration}_${waveType}_${volume}`;
+  const cacheKey = `${frequency}_${duration}_${waveType}_${volume.toFixed(2)}`;
   if (nativeSoundCache[cacheKey]) {
     return nativeSoundCache[cacheKey];
   }
@@ -104,7 +133,7 @@ async function playNativeAudio(soundCfg: SoundConfig, volume: number): Promise<v
   }
 }
 
-// Web Audio Context singleton (handles Web & React Native Web contexts)
+// Web Audio Context singleton
 let audioCtx: AudioContext | null = null;
 
 function getAudioContext(): AudioContext | null {
@@ -126,7 +155,8 @@ function getAudioContext(): AudioContext | null {
 export function playSound(
   config: SoundConfig | SoundType | string,
   userConfigs?: Record<string, SoundConfig>,
-  overrideVolume?: number
+  overrideVolume?: number,
+  masterVolOverride?: number
 ): void {
   try {
     let soundCfg: SoundConfig;
@@ -142,11 +172,15 @@ export function playSound(
       soundCfg = config;
     }
 
-    const volume = overrideVolume !== undefined ? overrideVolume : soundCfg.volume;
+    const baseVol = overrideVolume !== undefined ? overrideVolume : soundCfg.volume;
+    const masterVol = masterVolOverride !== undefined ? masterVolOverride : currentAudioSettings.masterVolume;
+    const finalVolume = Math.max(0, Math.min(1, baseVol * masterVol));
+
+    if (finalVolume <= 0) return;
 
     // Platform Branching: Native iOS/Android vs Web Browser
     if (Platform.OS !== 'web') {
-      playNativeAudio(soundCfg, volume);
+      playNativeAudio(soundCfg, finalVolume);
       return;
     }
 
@@ -155,15 +189,15 @@ export function playSound(
 
     // Web Audio Context playback
     if (soundCfg.soundId === 'boxing_bell') {
-      playBoxingBell(ctx, soundCfg, volume);
+      playBoxingBell(ctx, soundCfg, finalVolume);
     } else if (soundCfg.soundId === 'whistle') {
-      playWhistle(ctx, soundCfg, volume);
+      playWhistle(ctx, soundCfg, finalVolume);
     } else if (soundCfg.soundId === 'double_beep') {
-      playDoubleBeep(ctx, soundCfg, volume);
+      playDoubleBeep(ctx, soundCfg, finalVolume);
     } else if (soundCfg.soundId === 'chime') {
-      playChime(ctx, soundCfg, volume);
+      playChime(ctx, soundCfg, finalVolume);
     } else {
-      playStandardTone(ctx, soundCfg, volume);
+      playStandardTone(ctx, soundCfg, finalVolume);
     }
   } catch (err) {
     // Fail-safe gracefully
